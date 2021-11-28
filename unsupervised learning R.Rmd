@@ -1,0 +1,300 @@
+# **CONSUMER BEHAVIOR ANALYSIS**
+
+## **Objective**
+
+The Sales and Marketing team of Kira Plastinina Brand seeks to understand their customer’s behavior from data collected from chain of retail stores in Russia, Ukraine, Kazakhstan, Belarus, China, Philippines, and Armenia.
+
+## **Experimental Design**
+
+1.Exploratory Data Analysis
+
+2.Modeling with KMeans and Hierarchical Clustering
+
+```{r}
+#Loading libraries
+packages<-function(x){
+  x<-as.character(match.call()[[2]])
+  if (!require(x,character.only=TRUE)){
+    install.packages(pkgs=x,repos="http://cran.r-project.org")
+    require(x,character.only=TRUE)
+  }
+}
+
+packages(tidyverse) # data manipulation
+packages(corrplot)
+packages(gridExtra)
+packages(GGally)
+packages(cluster) # clustering algorithms 
+packages(factoextra)
+```
+
+## **Loading and Previewing Dataset**
+```{r}
+consumer_df <- read.csv("http://bit.ly/EcommerceCustomersDataset")
+rmarkdown::paged_table(head(consumer_df,n=5))
+```
+```{r}
+rmarkdown::paged_table(tail(consumer_df,n=5))
+```
+```{r}
+#Checking the shape of the dataset
+dim(consumer_df)
+#the dataset has 18 columns and 12330 rows
+```
+```{r}
+#Checking the column names
+colnames(consumer_df)
+```
+```{r}
+#Checking data types
+sapply(consumer_df,class)
+```
+## **Data Cleaning**
+**Checking for duplicated values**
+```{r}
+sum(duplicated(consumer_df))
+```
+```{r}
+#Removing duplicates
+consumerdf <-consumer_df[!duplicated(consumer_df), ]
+#Checking if duplicates have been dropped successfully
+sum(duplicated(consumerdf))
+```
+**Dealing with missing values**
+```{r}
+colSums(is.na(consumerdf))
+```
+```{r}
+#Removing missing values
+consumerdf <-na.omit(consumerdf,)
+#Checking if missing values have been successfully dropped
+sum(is.na(consumerdf))
+```
+
+```{r}
+#Checking the shape of the data
+dim(consumerdf)
+```
+```{r}
+boxplot(consumerdf$Administrative)
+```
+```{r}
+boxplot(consumerdf$Administrative_Duration)
+```
+```{r}
+boxplot(consumerdf$Informational)
+```
+```{r}
+boxplot(consumerdf$Informational_Duration)
+```
+```{r}
+boxplot(consumerdf$ProductRelated,consumerdf$PageValues)
+```
+```{r}
+boxplot(consumerdf$ProductRelated_Duration)
+```
+```{r}
+boxplot(consumerdf$BounceRates,consumerdf$ExitRates)
+```
+```{r}
+boxplot(consumerdf$OperatingSystems,consumerdf$SpecialDay,consumerdf$Browser)
+```
+There is presence of outliers, however, the are legitimate data point and therefore will not be dropped.
+**Checking for anomalies**
+```{r}
+unique(consumerdf$Revenue)
+unique(consumerdf$Weekend)
+unique(consumerdf$Month)
+#Months January and April are not represented in the data
+unique(consumerdf$Region)
+unique(consumerdf$VisitorType)
+unique(consumerdf$TrafficType)
+```
+## **Exploratory Data Analysis**
+### **Univariate Analysis**
+```{r}
+summary(consumerdf[,c(2,4,6,7,8)])
+
+```
+
+```{r}
+x=table(consumerdf$VisitorType)
+barplot(x, xlab="Consumer type",ylab="count",main = "Distribution of People Visiting the Site")
+#Majority of the respondents were return visitors to the site
+```
+```{r}
+x=table(consumerdf$Month)
+barplot(x,xlab="Months",ylab="Count", main="Distribution of Monthly Site Visit")
+#More people visited the sites in the months of May, November, March and December
+```
+```{r}
+x=table(consumer_df$OperatingSystems)
+barplot(x,xlab="OS Type",ylab="Count",main="Distribution of Operating Systems Used")
+# OS type 2 Users visited the site more conpared to OS types 5 & 6
+```
+```{r}
+x=table(consumerdf$Weekend)
+barplot(x,xlab = "Weekend",ylab="Count",main = "Weekend Frequency Site Visits")
+#More people visited the sites during weekdays compared to weekends. However it cannot be comparable since the are more weekdays than there are weekends
+```
+```{r}
+x=table(consumerdf$Revenue)
+pie(x,main = "Distribution of Revenue")
+#Despite visiting the site, few people ended up spending on the products
+```
+```{r}
+table(consumerdf$Revenue)
+```
+```{r}
+hist(consumerdf$Administrative_Duration,main = "Visit Duration of Admnistrative Page", xlab = "Duration",col = "Orange")
+```
+```{r}
+hist(consumerdf$Informational_Duration,main = "Visit Duration of Information Page", xlab = "Duration",col = "Orange")
+```
+```{r}
+hist(consumerdf$ProductRelated_Duration ,main = "Visit Duration of Product Page", xlab = "Duration",col = "Orange")
+```
+### **Bivariate Analysis**
+```{r}
+r <-table(consumerdf$Revenue)
+t <-table(consumerdf$Weekend)
+barplot(r,t,height = r)
+```
+```{r}
+library(corrplot)
+corrplot(cor(consumerdf[,c(1,2,3,4,5,6,7,8,9,10)]))
+```
+```{r}
+plot(consumer_df$BounceRates,consumer_df$ExitRates,xlab = "Bounce rates",ylab = "Exit rates",main="Association Bounce rates and Exit rates",col = "orange")
+#There is a positive corrilation between bounce and exit rates
+```
+```{r}
+plot(consumer_df$BounceRates,consumer_df$Informational_Duration,xlab = "Bounce rates",ylab = "Exit rates",main="Association Bounce rates and Infomation Duration",col = "orange")
+```
+```{r}
+plot(consumer_df$Administrative_Duration,consumer_df$ExitRates,xlab = "admin Duration",ylab = "Exit rates",main="Association Administration Duration and Exit rates",col = "orange")
+```
+```{r}
+library(ggplot2)
+ggplot(consumer_df, aes(x = Month,fill =Revenue),
+       title(main ="Month vs revenue status" )) +
+  geom_bar()
+```
+```{r}
+ggplot(consumer_df, aes(x = Weekend,fill =Revenue),
+       title(main ="Product Site vs revenue status" )) +
+  geom_bar()
+```
+## **Modeling**
+### **Data Preparation**
+```{r}
+#Dropping the label column
+consumerdf$Revenue <- NULL
+colnames(consumerdf)
+```
+```{r}
+#Encoding character data typed columns
+consumerdf$Month <- factor(consumerdf$Month)
+consumerdf$Month <- as.numeric(consumerdf$Month)
+consumerdf$VisitorType <- as.factor(consumerdf$VisitorType)
+consumerdf$VisitorType <- as.numeric(consumerdf$VisitorType)
+consumerdf$Weekend <- ifelse(consumerdf$Weekend==FALSE,0,1)
+head(consumerdf)
+```
+**Data scaling**
+```{r}
+modeling.data <-scale(consumerdf)
+```
+## **Implementing solution with K-Means**
+### **K-Means Clustering**
+```{r}
+#Identifying optimal k
+fviz_nbclust(x = modeling.data,FUNcluster = kmeans, method = 'silhouette')
+#The best k is 2
+```
+```{r}
+#clustering with kmeans
+modelled <-kmeans(modeling.data,centers = 2,nstart = 25)
+```
+```{r}
+#Visualizing the clusters
+fviz_cluster(modelled, data = modeling.data)
+```
+```{r}
+#Checking the size of each cluster
+modelled$size
+# One cluster has 1927 data points while the other has 10272 data points.
+```
+## **Challenging solution with Hierachical Clustering**
+### **Hierarchical Clustering**
+```{r}
+#Calculating the distance
+distance <- dist(modeling.data,method = "manhattan")
+```
+```{r}
+#Hierarchical clustering
+model2 <-hclust(distance)
+```
+```{r}
+#Visualizing the dendogram
+plot(model2, cex = 0.2, hang = -5)
+```
+```{r}
+model2$size
+```
+Reference:file:///C:/Users/Angela%20Nyutu/Documents/Ad%20modeling/unsupervised-learning-R.html
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
